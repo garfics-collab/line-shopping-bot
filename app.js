@@ -79,7 +79,7 @@ async function getProducts() {
 }
 
 // 加入購物車
-async function addToCart(userId, itemId) {
+async function addToCart(userId, itemId, qty) {
   const auth = await getAuth();
   const sheets = google.sheets({ version: "v4", auth });
   await sheets.spreadsheets.values.append({
@@ -87,8 +87,8 @@ async function addToCart(userId, itemId) {
     range: "cart!A:E",
     valueInputOption: "RAW",
     requestBody: {
-      values: [[userId, itemId, 1, new Date().toISOString(), "active"]],
-    },
+      values: [[userId, itemId, qty, new Date().toISOString(), "active"]]
+    }
   });
 }
 
@@ -176,47 +176,65 @@ async function handleTextMessage(event) {
   const userId = event.source.userId;
   const text = event.message.text.toLowerCase();
 
-  if (text === "購物") {
-    const products = await getProducts();
+ if (text === "購物") {
+  const products = await getProducts();
 
-    return client.replyMessage(event.replyToken, {
-      type: "flex",
-      altText: "購物商品",
-      contents: {
-        type: "carousel",
-        contents: Object.keys(products).map((itemId) => {
-          const p = products[itemId];
-          return {
-            type: "bubble",
-            body: {
-              type: "box",
-              layout: "vertical",
-              contents: [
-                { type: "text", text: p.name, weight: "bold", size: "xl" },
-                { type: "text", text: p.description, size: "sm", wrap: true },
-                { type: "text", text: `NT$${p.price}`, weight: "bold", color: "#ff5551" },
-              ],
-            },
-            footer: {
-              type: "box",
-              layout: "vertical",
-              contents: [
-                {
-                  type: "button",
-                  style: "primary",
-                  color: "#ff5551",
-                  action: {
-                    type: "postback",
-                    label: "加入購物車",
-                    data: `action=add_to_cart&item_id=${itemId}`,
-                  },
-                },
-              ],
-            },
-          };
-        }),
+  const bubbles = Object.keys(products).map(itemId => {
+    const product = products[itemId];
+    return {
+      type: "bubble",
+      hero: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: product.name,
+            weight: "bold",
+            size: "xl"
+          },
+          {
+            type: "text",
+            text: product.description,
+            size: "sm",
+            color: "#666666",
+            margin: "md"
+          },
+          {
+            type: "text",
+            text: `NT$ ${product.price}`,
+            size: "lg",
+            color: "#ff5551",
+            weight: "bold",
+            margin: "md"
+          }
+        ]
       },
-    });
+      footer: {
+        type: "box",
+        layout: "horizontal",
+        spacing: "md",
+        contents: [1, 2, 3].map(qty => ({
+          type: "button",
+          style: "primary",
+          color: "#ff5551",
+          action: {
+            type: "postback",
+            label: `${qty}包`,
+            data: `action=add_to_cart&item_id=${itemId}&qty=${qty}`
+          }
+        }))
+      }
+    };
+  });
+
+  return client.replyMessage(event.replyToken, {
+    type: "flex",
+    altText: "商品列表",
+    contents: { type: "carousel", contents: bubbles }
+  });
+}
+
   } else if (text === "購物車") {
     const userCart = await getCart(userId);
     if (userCart.length === 0) {
@@ -273,11 +291,16 @@ async function handlePostback(event) {
   const data = new URLSearchParams(event.postback.data);
   const action = data.get("action");
 
-  if (action === "add_to_cart") {
-    const itemId = data.get("item_id");
-    await addToCart(userId, itemId);
-    return client.replyMessage(event.replyToken, { type: "text", text: "✅ 已加入購物車" });
-  } else if (action === "checkout") {
+if (action === "add_to_cart") {
+  const itemId = data.get("item_id");
+  const qty = Number(data.get("qty")) || 1;
+  await addToCart(userId, itemId, qty);
+  return client.replyMessage(event.replyToken, {
+    type: "text",
+    text: `✅ 已加入購物車：${qty}包`
+  });
+}
+else if (action === "checkout") {
     const order = await createOrder(userId);
     if (!order) {
       return client.replyMessage(event.replyToken, { type: "text", text: "⚠️ 購物車是空的" });
