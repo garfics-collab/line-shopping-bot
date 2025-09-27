@@ -321,3 +321,259 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
+// 在現有的 app.js 最後加入這些路由
+
+// 管理員後台路由
+app.get('/admin', (req, res) => {
+  // 簡單的管理後台 HTML
+  const adminHTML = `
+    <!DOCTYPE html>
+    <html lang="zh-TW">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>購物 Bot 管理後台</title>
+        <style>
+            body { 
+                font-family: Arial, sans-serif; 
+                max-width: 1200px; 
+                margin: 0 auto; 
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+            .header { 
+                background: #ff5551; 
+                color: white; 
+                padding: 20px; 
+                border-radius: 8px; 
+                margin-bottom: 20px;
+            }
+            .stats {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 20px;
+                margin-bottom: 30px;
+            }
+            .stat-card {
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                text-align: center;
+            }
+            .stat-number { font-size: 2em; font-weight: bold; color: #ff5551; }
+            .orders-table { 
+                background: white; 
+                border-radius: 8px; 
+                overflow: hidden;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            table { 
+                width: 100%; 
+                border-collapse: collapse; 
+            }
+            th, td { 
+                padding: 12px; 
+                text-align: left; 
+                border-bottom: 1px solid #ddd; 
+            }
+            th { 
+                background-color: #f8f9fa; 
+                font-weight: bold;
+            }
+            .refresh-btn {
+                background: #ff5551;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                margin-bottom: 20px;
+            }
+            .refresh-btn:hover { background: #e04444; }
+            .user-id { font-family: monospace; font-size: 0.8em; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>🛒 購物 Bot 管理後台</h1>
+            <p>即時監控訂單和購物車狀況</p>
+        </div>
+
+        <button class="refresh-btn" onclick="window.location.reload()">🔄 重新整理</button>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalOrders">0</div>
+                <div>總訂單數</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalRevenue">0</div>
+                <div>總營業額 (NT$)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="activeUsers">0</div>
+                <div>活躍用戶</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="cartItems">0</div>
+                <div>購物車商品數</div>
+            </div>
+        </div>
+
+        <div class="orders-table">
+            <h2 style="padding: 20px; margin: 0; background: #f8f9fa;">📋 最近訂單</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>訂單編號</th>
+                        <th>用戶 ID</th>
+                        <th>商品</th>
+                        <th>金額</th>
+                        <th>時間</th>
+                    </tr>
+                </thead>
+                <tbody id="ordersTableBody">
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 40px; color: #666;">
+                            載入中...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div style="margin-top: 30px; padding: 20px; background: white; border-radius: 8px;">
+            <h3>🛍️ 購物車狀況</h3>
+            <div id="cartStatus">載入中...</div>
+        </div>
+
+        <script>
+            // 載入資料
+            async function loadData() {
+                try {
+                    const response = await fetch('/admin/api/stats');
+                    const data = await response.json();
+                    
+                    // 更新統計資料
+                    document.getElementById('totalOrders').textContent = data.totalOrders;
+                    document.getElementById('totalRevenue').textContent = data.totalRevenue.toLocaleString();
+                    document.getElementById('activeUsers').textContent = data.activeUsers;
+                    document.getElementById('cartItems').textContent = data.cartItems;
+                    
+                    // 更新訂單表格
+                    const tbody = document.getElementById('ordersTableBody');
+                    if (data.recentOrders.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #666;">暫無訂單</td></tr>';
+                    } else {
+                        tbody.innerHTML = data.recentOrders.map(order => \`
+                            <tr>
+                                <td><strong>\${order.orderId}</strong></td>
+                                <td class="user-id">\${order.userId}</td>
+                                <td>\${order.itemsText}</td>
+                                <td><strong>NT$ \${order.total.toLocaleString()}</strong></td>
+                                <td>\${new Date(order.timestamp).toLocaleString('zh-TW')}</td>
+                            </tr>
+                        \`).join('');
+                    }
+                    
+                    // 更新購物車狀況
+                    const cartDiv = document.getElementById('cartStatus');
+                    if (data.cartStatus.length === 0) {
+                        cartDiv.innerHTML = '<p style="color: #666;">目前沒有用戶的購物車有商品</p>';
+                    } else {
+                        cartDiv.innerHTML = data.cartStatus.map(user => \`
+                            <div style="margin-bottom: 10px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                                <strong>用戶:</strong> <span class="user-id">\${user.userId}</span><br>
+                                <strong>商品:</strong> \${user.items}
+                            </div>
+                        \`).join('');
+                    }
+                    
+                } catch (error) {
+                    console.error('載入資料失敗:', error);
+                }
+            }
+            
+            // 頁面載入時執行
+            loadData();
+            
+            // 每 30 秒自動更新
+            setInterval(loadData, 30000);
+        </script>
+    </body>
+    </html>
+  `;
+  
+  res.send(adminHTML);
+});
+
+// API 端點：提供管理後台資料
+app.get('/admin/api/stats', (req, res) => {
+  try {
+    // 計算統計資料
+    let totalOrders = 0;
+    let totalRevenue = 0;
+    let recentOrders = [];
+    
+    // 統計所有訂單
+    Object.keys(orders).forEach(userId => {
+      totalOrders += orders[userId].length;
+      orders[userId].forEach(order => {
+        totalRevenue += order.total;
+        recentOrders.push({
+          orderId: order.orderId,
+          userId: userId,
+          total: order.total,
+          timestamp: order.timestamp,
+          itemsText: Object.keys(order.items).map(itemId => {
+            const product = products[itemId];
+            return \`\${product.name} x\${order.items[itemId]}\`;
+          }).join(', ')
+        });
+      });
+    });
+    
+    // 排序訂單（最新的在前面）
+    recentOrders.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    // 只取最近 10 筆
+    recentOrders = recentOrders.slice(0, 10);
+    
+    // 計算購物車統計
+    const activeUsers = Object.keys(cart).length;
+    let cartItems = 0;
+    const cartStatus = [];
+    
+    Object.keys(cart).forEach(userId => {
+      const userCart = cart[userId];
+      const itemCount = Object.values(userCart).reduce((sum, qty) => sum + qty, 0);
+      cartItems += itemCount;
+      
+      if (itemCount > 0) {
+        const itemsText = Object.keys(userCart).map(itemId => {
+          const product = products[itemId];
+          return \`\${product.name} x\${userCart[itemId]}\`;
+        }).join(', ');
+        
+        cartStatus.push({
+          userId: userId,
+          items: itemsText
+        });
+      }
+    });
+    
+    res.json({
+      totalOrders,
+      totalRevenue,
+      activeUsers,
+      cartItems,
+      recentOrders,
+      cartStatus
+    });
+    
+  } catch (error) {
+    console.error('統計資料錯誤:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
