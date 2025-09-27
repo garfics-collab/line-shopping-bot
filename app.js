@@ -8,14 +8,14 @@ const { google } = require("googleapis");
 const app = express();
 const port = process.env.PORT || 3000;
 
-// LINE Bot 設定（⚠️ Render 環境變數要設好）
+// LINE Bot 設定
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.CHANNEL_SECRET,
 };
 const client = new line.Client(config);
 
-// Google Sheets 設定（⚠️ Render 環境變數要設好）
+// Google Sheets 設定
 const SHEET_ID = process.env.SHEET_ID;
 const GOOGLE_CREDENTIALS = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 
@@ -87,8 +87,8 @@ async function addToCart(userId, itemId, qty) {
     range: "cart!A:E",
     valueInputOption: "RAW",
     requestBody: {
-      values: [[userId, itemId, qty, new Date().toISOString(), "active"]]
-    }
+      values: [[userId, itemId, qty, new Date().toISOString(), "active"]],
+    },
   });
 }
 
@@ -176,64 +176,45 @@ async function handleTextMessage(event) {
   const userId = event.source.userId;
   const text = event.message.text.toLowerCase();
 
- if (text === "購物") {
-  const products = await getProducts();
+  if (text === "購物") {
+    const products = await getProducts();
 
-  const bubbles = Object.keys(products).map(itemId => {
-    const product = products[itemId];
-    return {
-      type: "bubble",
-      hero: {
-        type: "box",
-        layout: "vertical",
-        contents: [
-          {
-            type: "text",
-            text: product.name,
-            weight: "bold",
-            size: "xl"
-          },
-          {
-            type: "text",
-            text: product.description,
-            size: "sm",
-            color: "#666666",
-            margin: "md"
-          },
-          {
-            type: "text",
-            text: `NT$ ${product.price}`,
-            size: "lg",
+    const bubbles = Object.keys(products).map((itemId) => {
+      const product = products[itemId];
+      return {
+        type: "bubble",
+        body: {
+          type: "box",
+          layout: "vertical",
+          contents: [
+            { type: "text", text: product.name, weight: "bold", size: "xl" },
+            { type: "text", text: product.description, size: "sm", color: "#666666", margin: "md" },
+            { type: "text", text: `NT$ ${product.price}`, size: "lg", color: "#ff5551", weight: "bold", margin: "md" }
+          ],
+        },
+        footer: {
+          type: "box",
+          layout: "horizontal",
+          spacing: "md",
+          contents: [1, 2, 3].map((qty) => ({
+            type: "button",
+            style: "primary",
             color: "#ff5551",
-            weight: "bold",
-            margin: "md"
-          }
-        ]
-      },
-      footer: {
-        type: "box",
-        layout: "horizontal",
-        spacing: "md",
-        contents: [1, 2, 3].map(qty => ({
-          type: "button",
-          style: "primary",
-          color: "#ff5551",
-          action: {
-            type: "postback",
-            label: `${qty}包`,
-            data: `action=add_to_cart&item_id=${itemId}&qty=${qty}`
-          }
-        }))
-      }
-    };
-  });
+            action: {
+              type: "postback",
+              label: `${qty}包`,
+              data: `action=add_to_cart&item_id=${itemId}&qty=${qty}`,
+            },
+          })),
+        },
+      };
+    });
 
-  return client.replyMessage(event.replyToken, {
-    type: "flex",
-    altText: "商品列表",
-    contents: { type: "carousel", contents: bubbles }
-  });
-}
+    return client.replyMessage(event.replyToken, {
+      type: "flex",
+      altText: "商品列表",
+      contents: { type: "carousel", contents: bubbles },
+    });
 
   } else if (text === "購物車") {
     const userCart = await getCart(userId);
@@ -276,31 +257,36 @@ async function handleTextMessage(event) {
         },
       },
     });
+
   } else if (text === "訂單") {
     return client.replyMessage(event.replyToken, { type: "text", text: "📋 訂單查詢功能開發中" });
-  }
 
-  return client.replyMessage(event.replyToken, {
-    type: "text",
-    text: "輸入「購物」查看商品\n輸入「購物車」查看購物車\n輸入「訂單」查看訂單",
-  });
+  } else {
+    return client.replyMessage(event.replyToken, {
+      type: "text",
+      text: "輸入「購物」查看商品\n輸入「購物車」查看購物車\n輸入「訂單」查看訂單",
+    });
+  }
 }
 
+// =======================
+// 📌 6. Postback
+// =======================
 async function handlePostback(event) {
   const userId = event.source.userId;
   const data = new URLSearchParams(event.postback.data);
   const action = data.get("action");
 
-if (action === "add_to_cart") {
-  const itemId = data.get("item_id");
-  const qty = Number(data.get("qty")) || 1;
-  await addToCart(userId, itemId, qty);
-  return client.replyMessage(event.replyToken, {
-    type: "text",
-    text: `✅ 已加入購物車：${qty}包`
-  });
-}
-else if (action === "checkout") {
+  if (action === "add_to_cart") {
+    const itemId = data.get("item_id");
+    const qty = Number(data.get("qty")) || 1;
+    await addToCart(userId, itemId, qty);
+    return client.replyMessage(event.replyToken, {
+      type: "text",
+      text: `✅ 已加入購物車：${qty}包`,
+    });
+
+  } else if (action === "checkout") {
     const order = await createOrder(userId);
     if (!order) {
       return client.replyMessage(event.replyToken, { type: "text", text: "⚠️ 購物車是空的" });
@@ -313,14 +299,14 @@ else if (action === "checkout") {
 }
 
 // =======================
-// 📌 6. 管理後台 (簡單示範)
+// 📌 7. 管理後台
 // =======================
 app.get("/admin", (req, res) => {
   res.send("<h1>🛒 Admin 後台</h1><p>這裡可以顯示訂單數據（之後加）</p>");
 });
 
 // =======================
-// 📌 7. 啟動
+// 📌 8. 啟動
 // =======================
 app.listen(port, () => {
   console.log(`✅ Server running on port ${port}`);
