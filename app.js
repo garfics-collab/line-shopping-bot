@@ -63,28 +63,38 @@ async function handleEvent(event) {
 // 4. Notify API (Vercel → LINE)
 // =======================
 // Vercel 呼叫這個 API，傳進 bossText / buyerText
-// Render Bot 就直接發出去，不做字串組裝
 app.post("/notify", async (req, res) => {
   try {
     const { bossText, buyerText, userId } = req.body;
-    const bossId = process.env.BOSS_LINE_ID; // 老闆的 LINE UserId
+    const bossId = process.env.BOSS_LINE_ID;
 
-    // 通知老闆
+    const results = {};
+
     if (bossId && bossText) {
-      await client.pushMessage(bossId, { type: "text", text: bossText });
+      try {
+        await client.pushMessage(bossId, { type: "text", text: bossText });
+        results.boss = "✅ 已發送給老闆";
+      } catch (err) {
+        results.boss = `❌ 老闆訊息失敗: ${err.message}`;
+      }
     }
 
-    // 通知買家（有綁定才會送）
     if (userId && buyerText) {
-      await client.pushMessage(userId, { type: "text", text: buyerText });
+      try {
+        await client.pushMessage(userId, { type: "text", text: buyerText });
+        results.buyer = "✅ 已發送給買家";
+      } catch (err) {
+        results.buyer = `❌ 買家訊息失敗: ${err.message}`;
+      }
     }
 
-    res.json({ success: true });
+    res.json(results);
   } catch (err) {
     console.error("❌ Notify error:", err);
-    res.status(500).json({ error: "Notify failed" });
+    res.status(500).json({ error: "Notify failed", detail: err.message });
   }
 });
+
 
 // =======================
 // 5. 啟動
