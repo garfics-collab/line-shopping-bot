@@ -43,21 +43,38 @@ async function handleEvent(event) {
     const userId = event.source.userId;
     const text = event.message.text.trim();
 
-    if (text === "綁定") {
+    if (text === "購物") {
       return client.replyMessage(event.replyToken, {
         type: "text",
-        text: `✅ 綁定成功！你的 userId 是：${userId}\n以後訂單成立時會通知你。`,
+        text:
+          "🛒 歡迎來到 Brain-Fog-Cafe\n\n" +
+          "👉 請點擊以下連結進入購物網站：\n" +
+          "https://brain-fog-rho.vercel.app\n\n" +
+          "📌 使用方式：\n" +
+          "1. 選購商品並下單\n" +
+          "2. 取貨方式可選 7-11 或 北投 STORY\n" +
+          "3. 下單後您會收到 LINE 通知\n\n" +
+          "若要接收訂單更新，請先輸入：\n「綁定 姓名(與7-11取貨證件姓名相同) 電話(與7-11取貨通知手機相同)」",
       });
     }
 
-    console.log("🔍 收到 userId:", userId);
+    if (text.startsWith("綁定")) {
+      // 保留綁定的程式
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: `✅ 綁定成功！你的 userId 是：${userId}`,
+      });
+    }
+
+    // 其他訊息
     return client.replyMessage(event.replyToken, {
       type: "text",
-      text: `你的 userId 是：${userId}\n輸入「綁定」即可接收訂單通知`,
+      text: `🔍 你的 userId 是：${userId}\n輸入「購物」可獲得購物網站連結`,
     });
   }
   return Promise.resolve(null);
 }
+
 
 // =======================
 // 4. Notify API (Vercel → LINE)
